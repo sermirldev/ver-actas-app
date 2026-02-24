@@ -1,10 +1,11 @@
 'use client'
 
+import { ReactNode } from 'react';
 import { AuthProvider, useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 
-function AuthenticatedLayout({ children }) {
+function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -32,7 +33,7 @@ function AuthenticatedLayout({ children }) {
   );
 }
 
-export default function MainLayout({ children }) {
+export default function MainLayout({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <AuthenticatedLayout>{children}</AuthenticatedLayout>

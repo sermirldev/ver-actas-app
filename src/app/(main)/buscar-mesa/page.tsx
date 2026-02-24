@@ -1,17 +1,25 @@
 'use client'
 
 import { useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import { db, storage } from '../../../lib/firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
 
+// Define a type for the document data
+interface Acta extends DocumentData {
+  id: string;
+  nro_mesa: string;
+  gcs_uri?: string;
+  imageUrl?: string | null;
+}
+
 export default function BuscarMesaPage() {
   const [mesa, setMesa] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<Acta[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async (e) => {
+  const handleSearch = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!mesa) return;
 
@@ -27,7 +35,14 @@ export default function BuscarMesaPage() {
         setError('No se encontraron actas para esta mesa.');
       } else {
         const dataPromises = querySnapshot.docs.map(async (doc) => {
-          const actaData = { id: doc.id, ...doc.data() };
+          const docData = doc.data() as DocumentData;
+          const actaData: Acta = {
+            id: doc.id,
+            nro_mesa: docData.nro_mesa,
+            gcs_uri: docData.gcs_uri,
+            ...docData,
+          };
+
           let imageUrl = null;
 
           if (actaData.gcs_uri) {
