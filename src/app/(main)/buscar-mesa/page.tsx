@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { db, storage } from '../../../lib/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 export default function BuscarMesaPage() {
   const [mesa, setMesa] = useState('');
@@ -21,14 +22,29 @@ export default function BuscarMesaPage() {
     try {
       const q = query(collection(db, 'actas_procesadas'), where('nro_mesa', '==', mesa));
       const querySnapshot = await getDocs(q);
+
       if (querySnapshot.empty) {
         setError('No se encontraron actas para esta mesa.');
       } else {
-        const data = [];
-        querySnapshot.forEach((doc) => {
-          data.push({ id: doc.id, ...doc.data() });
+        const dataPromises = querySnapshot.docs.map(async (doc) => {
+          const actaData = { id: doc.id, ...doc.data() };
+          let imageUrl = null;
+
+          if (actaData.gcs_uri) {
+            try {
+              const filePath = actaData.gcs_uri.replace(/gs:\/\/[^\/]+\//, '');
+              const imageRef = ref(storage, filePath);
+              imageUrl = await getDownloadURL(imageRef);
+            } catch (storageError) {
+              console.error("Error al obtener URL de la imagen: ", storageError);
+              // Gracefully handle image loading errors
+            }
+          }
+          return { ...actaData, imageUrl };
         });
-        setResults(data);
+
+        const resolvedData = await Promise.all(dataPromises);
+        setResults(resolvedData);
       }
     } catch (err) {
       setError('Ocurrió un error al buscar.');
@@ -65,10 +81,10 @@ export default function BuscarMesaPage() {
             <h2 className="text-xl font-semibold mb-2">Acta: {acta.id}</h2>
             <div className="grid grid-cols-2 gap-4">
               {Object.entries(acta).map(([key, value]) => {
-                if (key !== 'id' && key !== 'gcs_uri') {
+                if (key !== 'id' && key !== 'gcs_uri' && key !== 'imageUrl') {
                   return (
                     <div key={key}>
-                      <p className="font-semibold">{key}:</p>
+                      <p className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</p>
                       <p>{String(value)}</p>
                     </div>
                   );
@@ -76,10 +92,15 @@ export default function BuscarMesaPage() {
                 return null;
               })}
             </div>
-            {acta.gcs_uri && (
+            {acta.imageUrl ? (
               <div className="mt-4">
                  <h3 className="font-semibold">Imagen del Acta</h3>
-                 <img src={acta.gcs_uri.replace("gs://", "https://storage.googleapis.com/")} alt="Acta" className="w-full h-auto rounded-lg" />
+                 <img src={acta.imageUrl} alt={`Acta de mesa ${acta.nro_mesa}`} className="w-full h-auto rounded-lg border" />
+              </div>
+            ) : (
+              <div className="mt-4">
+                <h3 className="font-semibold">Imagen del Acta</h3>
+                <p className="text-gray-500">No se pudo cargar la imagen para esta acta.</p>
               </div>
             )}
           </div>
