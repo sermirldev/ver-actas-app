@@ -1,11 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, DocumentData } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 
+interface Stats {
+    total_done: number;
+    total_error: number;
+    total_pending: number;
+    total_processing: number;
+    total_received: number;
+}
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     total_done: 0,
     total_error: 0,
     total_pending: 0,
@@ -20,7 +28,7 @@ export default function DashboardPage() {
         const docRef = doc(db, 'estadisticas', 'totales');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setStats(docSnap.data());
+          setStats(docSnap.data() as Stats);
         } else {
           console.log('No such document!');
         }
