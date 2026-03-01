@@ -48,17 +48,20 @@ const ElectionCategorySection = ({ categoryName, data }: { categoryName: string,
     const { propiedades, confianza } = data;
     if (!propiedades) return null;
 
-    const siglaProps = Object.entries(propiedades).filter(([key]) => key.startsWith('sigla_'));
+    const allProps = Object.entries(propiedades);
+    const siglaProps = allProps.filter(([key]) => key.startsWith('sigla_'));
+    const otherProps = allProps.filter(([key]) => !key.startsWith('sigla_'));
 
     return (
         <div className="border rounded-lg p-4 space-y-5 bg-gray-50/50">
             <h3 className="text-xl font-bold text-gray-800 capitalize">Resultados para: {categoryName}</h3>
-
-            {confianza !== undefined && (
-                <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                    <p className="font-semibold text-blue-800">Confianza General ({categoryName}): 
-                        <span className="font-bold text-lg ml-2">{(confianza * 100).toFixed(2)}%</span>
-                    </p>
+            
+            {otherProps.length > 0 && (
+                 <div>
+                    <h4 className="font-semibold text-md mb-3 text-gray-600 pl-2">Resumen de Votos</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {otherProps.map(([key, value]) => <PropertyField key={key} label={key} data={value} />)}
+                    </div>
                 </div>
             )}
             
