@@ -7,18 +7,20 @@ import { ref, getDownloadURL } from 'firebase/storage';
 
 // --- TYPE DEFINITIONS ---
 interface Property {
-    confianza: number;
-    valor: string;
+    confiabilidad: number;
+    votos?: string | number;
+    valor?: string;
+    x?: number;
+    y?: number;
     valor_normalizado?: string | null;
 }
 
 interface ElectionCategory {
-    confianza?: number;
-    propiedades?: Record<string, Property>;
+    propiedades?: Record<string, Property | null>;
 }
 
-interface CamposFormulario {
-    [key: string]: Property | ElectionCategory;
+interface DatosJson {
+    [key: string]: Property | ElectionCategory | any | null;
 }
 
 interface Acta extends DocumentData {
@@ -31,45 +33,66 @@ interface Acta extends DocumentData {
   fecha_completado?: Timestamp;
   fecha_ingreso?: Timestamp;
   fecha_procesamiento?: Timestamp;
-  campos_formulario?: CamposFormulario;
+  datos_json?: DatosJson;
 }
 
 // --- HELPER COMPONENTS ---
-const PropertyField = ({ label, data }: { label: string, data: Property }) => (
-    <div className="bg-white p-3 rounded-md border">
-        <p className="font-bold capitalize text-gray-800">{label.replace(/_/g, ' ')}</p>
-        <p className="text-sm"><span className="font-semibold">Valor:</span> {data.valor}</p>
-        {data.confianza !== undefined && <p className="text-sm"><span className="font-semibold">Confianza:</span> {(data.confianza * 100).toFixed(2)}%</p>}
-        {data.valor_normalizado && <p className="text-sm"><span className="font-semibold">Valor Normalizado:</span> {data.valor_normalizado}</p>}
-    </div>
-);
+const PropertyField = ({ label, data }: { label: string, data: Property | null }) => {
+    if (!data || Array.isArray(data)) {
+        return (
+            <div className="bg-white p-3 rounded-md border">
+                <p className="font-bold capitalize text-gray-800">{label.replace(/_/g, ' ')}</p>
+                <p className="text-sm"><span className="font-semibold">Valor:</span> N/A (Ver JSON)</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-white p-3 rounded-md border">
+            <p className="font-bold capitalize text-gray-800">{label.replace(/_/g, ' ')}</p>
+            <p className="text-sm"><span className="font-semibold">Valor:</span> {data.votos ?? data.valor}</p>
+            {data.confiabilidad !== undefined && <p className="text-sm"><span className="font-semibold">Confiabilidad:</span> {data.confiabilidad.toFixed(2)}%</p>}
+            {data.x !== undefined && <p className="text-sm"><span className="font-semibold">X:</span> {data.x.toFixed(4)}</p>}
+            {data.y !== undefined && <p className="text-sm"><span className="font-semibold">Y:</span> {data.y.toFixed(4)}</p>}
+        </div>
+    )
+};
 
 const ElectionCategorySection = ({ categoryName, data }: { categoryName: string, data: ElectionCategory }) => {
-    const { propiedades, confianza } = data;
+    const { propiedades } = data;
     if (!propiedades) return null;
 
     const allProps = Object.entries(propiedades);
-    const siglaProps = allProps.filter(([key]) => key.startsWith('sigla_'));
-    const otherProps = allProps.filter(([key]) => !key.startsWith('sigla_'));
+    const summaryKeys = ['blancos', 'nulos', 'validos'];
+
+    const summaryProps = allProps.filter(([key]) => {
+        const prefix = key.split('_')[0];
+        return summaryKeys.includes(prefix);
+    });
+
+    const candidateProps = allProps.filter(([key]) => {
+        const prefix = key.split('_')[0];
+        return !summaryKeys.includes(prefix);
+    });
 
     return (
         <div className="border rounded-lg p-4 space-y-5 bg-gray-50/50">
             <h3 className="text-xl font-bold text-gray-800 capitalize">Resultados para: {categoryName}</h3>
             
-            {otherProps.length > 0 && (
+            {summaryProps.length > 0 && (
                  <div>
                     <h4 className="font-semibold text-md mb-3 text-gray-600 pl-2">Resumen de Votos</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                       {otherProps.map(([key, value]) => <PropertyField key={key} label={key} data={value} />)}
+                       {summaryProps.map(([key, value]) => <PropertyField key={key} label={key} data={value} />)}
                     </div>
                 </div>
             )}
             
-            {siglaProps.length > 0 && (
+            {candidateProps.length > 0 && (
                  <div>
                     <h4 className="font-semibold text-md mb-3 text-gray-600 pl-2">Votos por Candidatura</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                       {siglaProps.map(([key, value]) => <PropertyField key={key} label={key} data={value} />)}
+                       {candidateProps.map(([key, value]) => <PropertyField key={key} label={key} data={value} />)}
                     </div>
                 </div>
             )}
@@ -148,16 +171,20 @@ export default function BuscarMesaPage() {
 
       <div className="space-y-8">
         {results.map((acta) => {
-            if (!acta.campos_formulario) return <p>No hay datos de formulario para mostrar.</p>;
+            if (!acta.datos_json) return <p>No hay datos de formulario para mostrar.</p>;
 
-            const generalFields: [string, Property][] = [];
+            const generalFields: [string, Property | null][] = [];
             const electionCategories: [string, ElectionCategory][] = [];
+            let observaciones: Property | null = null;
 
-            Object.entries(acta.campos_formulario).forEach(([key, value]) => {
-                if ('propiedades' in value) {
-                    electionCategories.push([key, value as ElectionCategory]);
+            Object.entries(acta.datos_json).forEach(([key, value]) => {
+                if (key === 'observaciones') {
+                    observaciones = value as Property | null;
+                } else if (value && typeof value === 'object' && !Array.isArray(value) && !('confiabilidad' in value)) {
+                    const categoryData: ElectionCategory = { propiedades: value as Record<string, Property | null> };
+                    electionCategories.push([key, categoryData]);
                 } else {
-                    generalFields.push([key, value as Property]);
+                    generalFields.push([key, value as Property | null]);
                 }
             });
 
@@ -193,6 +220,14 @@ export default function BuscarMesaPage() {
                     </div>
                 )}
                 
+                {/* Observaciones Section */}
+                {observaciones && observaciones.valor && (
+                     <div className="border rounded-lg p-4 bg-gray-50/50">
+                        <h3 className="text-lg font-semibold mb-3 text-gray-700">Observaciones</h3>
+                        <p className="text-gray-800 whitespace-pre-wrap">{observaciones.valor}</p>
+                     </div>
+                )}
+
                 {/* Election Categories */}
                 <div className="space-y-6">
                     {electionCategories.map(([category, data]) => (
@@ -214,6 +249,31 @@ export default function BuscarMesaPage() {
                     </div>
                   </div>
                 )}
+
+                {/* datos_json display */}
+                {acta.datos_json && (() => {
+                    const orderedJson: DatosJson = {};
+                    if (acta.datos_json.Alcalde) {
+                        orderedJson.Alcalde = acta.datos_json.Alcalde;
+                    }
+                    if (acta.datos_json.Concejal) {
+                        orderedJson.Concejal = acta.datos_json.Concejal;
+                    }
+                    for (const key in acta.datos_json) {
+                        if (key !== 'Alcalde' && key !== 'Concejal') {
+                            orderedJson[key] = acta.datos_json[key];
+                        }
+                    }
+
+                    return (
+                        <div className="mt-4">
+                            <h3 className="font-semibold text-lg mb-2 text-gray-700">Datos JSON</h3>
+                            <pre className="bg-gray-800 text-white p-4 rounded-md overflow-x-auto text-sm">
+                                <code>{JSON.stringify(orderedJson, null, 2)}</code>
+                            </pre>
+                        </div>
+                    );
+                })()}
               </div>
             )}
         )}
