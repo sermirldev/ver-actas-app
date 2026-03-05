@@ -175,11 +175,15 @@ export default function BuscarMesaPage() {
 
             const generalFields: [string, Property | null][] = [];
             const electionCategories: [string, ElectionCategory][] = [];
-            let observaciones: Property | null = null;
+            let observaciones_texto: string | null = null;
 
             Object.entries(acta.datos_json).forEach(([key, value]) => {
                 if (key === 'observaciones') {
-                    observaciones = value as Property | null;
+                    if (value && typeof value === 'object' && 'valor' in value && typeof (value as any).valor === 'string') {
+                        observaciones_texto = (value as any).valor;
+                    } else if (typeof value === 'string') {
+                        observaciones_texto = value;
+                    }
                 } else if (value && typeof value === 'object' && !Array.isArray(value) && !('confiabilidad' in value)) {
                     const categoryData: ElectionCategory = { propiedades: value as Record<string, Property | null> };
                     electionCategories.push([key, categoryData]);
@@ -221,10 +225,10 @@ export default function BuscarMesaPage() {
                 )}
                 
                 {/* Observaciones Section */}
-                {observaciones && observaciones.valor && (
+                {observaciones_texto && (
                      <div className="border rounded-lg p-4 bg-gray-50/50">
                         <h3 className="text-lg font-semibold mb-3 text-gray-700">Observaciones</h3>
-                        <p className="text-gray-800 whitespace-pre-wrap">{observaciones.valor}</p>
+                        <p className="text-gray-800 whitespace-pre-wrap">{observaciones_texto}</p>
                      </div>
                 )}
 
